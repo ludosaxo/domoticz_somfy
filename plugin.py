@@ -4,10 +4,10 @@
 # 
 # All credits for the plugin are for Nonolk, who is the origin plugin creator
 """
-<plugin key="tahomaIO" name="Somfy Tahoma or Connexoon plugin" author="MadPatrick" version="5.2.2" externallink="https://github.com/MadPatrick/somfy">
+<plugin key="tahomaIO" name="Somfy Tahoma or Connexoon plugin" author="MadPatrick" version="5.2.3" externallink="https://github.com/MadPatrick/somfy">
     <description>
         <br/><h2>Somfy Tahoma/Connexoon plugin</h2><br/>
-        Version: 5.2.2
+        Version: 5.2.3
         <br/>This plugin connects to the Tahoma or Connexoon box either via the web API or via local access.
         <br/>Various devices are supported (RollerShutter, LightSensor, Screen, Awning, Window, VenetianBlind, etc.).
         <br/>For new devices, please raise a ticket at the Github link above.
@@ -142,6 +142,9 @@ class BasePlugin:
         self.last_sunset = None
         self.sun_refresh_time = "02:00"  # Fallback
         self.last_sun_refresh_ts = datetime.datetime.min  # timestamp van laatste refresh
+        self._last_logged_sunrise = None
+        self._last_logged_sunset = None
+        self.last_interval = None
 
         # Domoticz / polling defaults
         self.domoticz_host = "127.0.0.1"
@@ -328,7 +331,18 @@ class BasePlugin:
         refresh_today = now.replace(hour=refresh_hour, minute=refresh_min, second=0, microsecond=0)
 
         # Forceer eerste refresh bij opstart
-        first_refresh = self.last_sun_refresh_ts is None or self.last_sun_refresh_ts <= datetime.datetime.min
+        # Veiligstellen type
+        if not isinstance(self.last_sun_refresh_ts, datetime.datetime):
+            try:
+                if isinstance(self.last_sun_refresh_ts, bytes):
+                    decoded = self.last_sun_refresh_ts.decode("utf-8")
+                    self.last_sun_refresh_ts = datetime.datetime.fromisoformat(decoded)
+                else:
+                    self.last_sun_refresh_ts = datetime.datetime.min
+            except:
+                self.last_sun_refresh_ts = datetime.datetime.min
+
+        first_refresh = self.last_sun_refresh_ts <= datetime.datetime.min
 
         # Controleer of refresh nodig is
         if first_refresh or (now >= refresh_today and self.last_sun_refresh_ts < refresh_today):
@@ -776,24 +790,28 @@ class BasePlugin:
         """Logs changes in interval, sunrise, and sunset, only if they differ from last known values."""
     
         # Detect changes
-        interval_changed = (getattr(self, 'last_interval', None) != interval)
-        sunrise_changed  = (getattr(self, 'last_sunrise', None) != sunrise_str)
-        sunset_changed   = (getattr(self, 'last_sunset', None) != sunset_str)
+        sunrise_changed = self._last_logged_sunrise != sunrise_str
+        sunset_changed  = self._last_logged_sunset != sunset_str
+        interval_changed = self.last_interval != interval
 
         # Log changes individually
         if interval_changed:
             Domoticz.Log(f"Polling interval changed: new interval = {interval}s")
 
         if sunrise_changed:
-            Domoticz.Log(f"Sunrise updated ({status_label}): {getattr(self, 'last_sunrise', 'N/A')} ? {sunrise_str}")
+            Domoticz.Log(
+                f"Sunrise changed: {self._last_logged_sunrise} -> {sunrise_str}"
+            )
 
         if sunset_changed:
-            Domoticz.Log(f"Sunset updated ({status_label}): {getattr(self, 'last_sunset', 'N/A')} ? {sunset_str}")
+            Domoticz.Log(
+                f"Sunset changed: {self._last_logged_sunset} -> {sunset_str}"
+            )
 
         # Update last-known values
         self.last_interval = interval
-        self.last_sunrise  = sunrise_str
-        self.last_sunset   = sunset_str
+        self._last_logged_sunrise = sunrise_str
+        self._last_logged_sunset  = sunset_str
 
 global _plugin
 _plugin = BasePlugin()
