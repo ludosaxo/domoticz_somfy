@@ -4,10 +4,10 @@
 # 
 # All credits for the plugin are for Nonolk, who is the origin plugin creator
 """
-<plugin key="tahomaIO" name="Somfy Tahoma or Connexoon plugin" author="MadPatrick" version="5.2.4" externallink="https://github.com/MadPatrick/somfy">
+<plugin key="tahomaIO" name="Somfy Tahoma or Connexoon plugin" author="MadPatrick" version="5.2.5" externallink="https://github.com/MadPatrick/somfy">
     <description>
         <br/><h2>Somfy Tahoma/Connexoon plugin</h2><br/>
-        Version: 5.2.4
+        Version: 5.2.5
         <br/>This plugin connects to the Tahoma or Connexoon box either via the web API or via local access.
         <br/>Various devices are supported (RollerShutter, LightSensor, Screen, Awning, Window, VenetianBlind, etc.).
         <br/>For new devices, please raise a ticket at the Github link above.
@@ -146,7 +146,6 @@ class BasePlugin:
         self._last_logged_sunset = None
         self.last_interval = None
 
-        # FIX 5: last_sunrise_ts / last_sunset_ts initialiseren zodat ze altijd bestaan
         self.last_sunrise_ts = None
         self.last_sunset_ts = None
 
@@ -159,10 +158,12 @@ class BasePlugin:
         self.sunsetDelay = 60
         self.temp_delay = 10
         self.temp_time  = 60
-        self.temp_interval_end = 0
-        self.connected = None  # None = onbekend, True = verbonden, False = fout
 
-        # FIX 9: _temp_log_active expliciet initialiseren
+        # OPT 5: temp_interval_end als time.time() zodat fast polling
+        # nooit per ongeluk actief is direct na de start
+        self.temp_interval_end = time.time()
+
+        self.connected = None  # None = onbekend, True = verbonden, False = fout
         self._temp_log_active = False
 
     def onStart(self):
@@ -273,7 +274,6 @@ class BasePlugin:
                 self.tahoma.generate_token(pin)
                 self.tahoma.activate_token(pin, self.tahoma.token)
                 setConfigItem('token', self.tahoma.token)
-                # FIX 7: Parameters is read-only in Domoticz, schrijfpoging verwijderd
             else:
                 logging.debug("found token in configuration: " + str(confToken))
                 self.tahoma.token = confToken
@@ -288,14 +288,8 @@ class BasePlugin:
         # --- DEVICES OPHALEN ---
         filtered_devices = self.tahoma.get_devices()
 
-        # FIX 1: altijd create_devices aanroepen zodat nieuwe devices worden
-        # toegevoegd ook als er al bestaande devices zijn.
-        # create_devices heeft intern al logica om duplicaten te voorkomen.
-        unit = firstFree()
-        if unit is None or unit >= 249:
-            Domoticz.Error("No free Domoticz units available, cannot create devices")
-            return False
-
+        # OPT 1: firstFree() check verwijderd — firstFree() werkte niet correct
+        # op basis van DeviceID-keys en de check was zinloos hier.
         self.create_devices(filtered_devices)
 
         # --- STATUS UPDATEN ---
@@ -358,7 +352,6 @@ class BasePlugin:
                     self.last_sunrise = sunrise_full[:5]
                     self.last_sunset  = sunset_full[:5]
 
-                    # FIX 5: last_sunrise_ts en last_sunset_ts worden hier gezet
                     self.last_sunrise_ts = now.replace(
                         hour=int(self.last_sunrise.split(":")[0]),
                         minute=int(self.last_sunrise.split(":")[1]),
@@ -403,8 +396,6 @@ class BasePlugin:
 
         Domoticz.Log(f"Day mode starts at {day_start_str} | Night mode starts at {night_start_str}")
 
-    # FIX 4: onMessage geeft geen Error meer â€” gebruik Debug zodat het log
-    # niet volloopt met valse foutmeldingen
     def onMessage(self, Connection, Data):
         Domoticz.Debug("onMessage called (not implemented). Data: " + str(Data))
 
@@ -416,8 +407,6 @@ class BasePlugin:
         commands = {}
         params = []
 
-        # FIX 8: else-tak toegevoegd zodat een onbekend commando voor unit 1
-        # een foutmelding geeft en de functie netjes afbreekt (KeyError voorkomen)
         if Unit == 1:
             if Command in ("Off", "Close"):
                 commands["name"] = "close"
@@ -460,13 +449,27 @@ class BasePlugin:
         else:
             self.command_data = json.dumps(data, indent=None, sort_keys=True)
 
-        # Log in if necessary
+        # OPT 8: login met expliciete guards zodat een mislukte login
+        # niet stilzwijgend wordt genegeerd en send_command toch wordt
+        # aangeroepen met een ongeldige sessie.
         if not self.tahoma.logged_in:
             Domoticz.Log("Not logged in, trying to login")
             self.command = True
-            self.tahoma.tahoma_login(str(Parameters["Username"]), str(Parameters["Password"]))
-            if self.tahoma.logged_in:
+            try:
+                self.tahoma.tahoma_login(str(Parameters["Username"]), str(Parameters["Password"]))
+            except Exception as e:
+                Domoticz.Error(f"Login mislukt, commando wordt afgebroken: {e}")
+                return False
+
+            if not self.tahoma.logged_in:
+                Domoticz.Error("Login mislukt (geen exception), commando wordt afgebroken")
+                return False
+
+            try:
                 self.tahoma.register_listener()
+            except Exception as e:
+                Domoticz.Error(f"register_listener mislukt na login: {e}")
+                return False
 
         # Send command
         try:
@@ -493,6 +496,14 @@ class BasePlugin:
 
         if not self.enabled:
             return False
+
+        # OPT 7: dagelijkse reload van config.txt zodat wijzigingen
+        # (host, port, sun_refresh_time) zonder herstart worden opgepikt
+        today = datetime.datetime.now().day
+        if today != self.last_config_day:
+            Domoticz.Log("Nieuwe dag gedetecteerd, config.txt herladen")
+            self.load_config_txt(log=True)
+            self.last_config_day = today
 
         self.refresh_daily_data()
 
@@ -537,15 +548,13 @@ class BasePlugin:
 
         if self.runCounter <= 0 or self.heartbeat:
 
-            # FIX 3: bij lokale verbinding get_devices() slechts eenmaal aanroepen
-            # en het resultaat hergebruiken voor zowel de connectiecheck als het pollen
             try:
                 if self.local:
-                    filtered_devices = self.tahoma.get_devices()  # Ã©Ã©n aanroep
+                    filtered_devices = self.tahoma.get_devices()
                 else:
                     if not self.tahoma.logged_in:
                         self.tahoma.tahoma_login(str(Parameters["Username"]), str(Parameters["Password"]))
-                    filtered_devices = None  # wordt later opgehaald
+                    filtered_devices = None
 
                 if self.connected is False:
                     Domoticz.Log("Connection restored")
@@ -569,7 +578,6 @@ class BasePlugin:
 
             if self.connected:
                 try:
-                    # Lokaal: resultaat is al opgehaald; web: haal nu op
                     if not self.local:
                         filtered_devices = self.tahoma.get_devices()
                     if filtered_devices is not None:
@@ -604,7 +612,6 @@ class BasePlugin:
                 deviceClassTrig = dataset.get("deviceClass")
                 level = None
                 status_num = 0
-                # FIX 10: 'status' variabele verwijderd â€” werd aangemaakt maar nooit gebruikt
                 nValue = 0
                 sValue = "0"
 
@@ -613,8 +620,6 @@ class BasePlugin:
                     Domoticz.Debug("update_devices_status: dataset['name'] != DeviceStateChangedEvent: "+str(dataset["name"])+": breaking out")
                     continue
 
-                # FIX 11: lumstatus_l en lumlevel buiten de loop initialiseren zodat
-                # de luminantie-update slechts eenmaal wordt gedaan na de hele loop
                 lumstatus_l = False
                 lumlevel = 0
 
@@ -656,8 +661,6 @@ class BasePlugin:
                                 sValue = str(level)
                             UpdateDevice(dev, status_num, nValue, sValue)
 
-                # FIX 11: luminantie-update buiten de loop, wordt nu maar eenmaal uitgevoerd
-                # FIX 12: vergelijk als float zodat string vs getal geen valse updates geeft
                 if lumstatus_l:
                     try:
                         int_lumlevel = float(Devices[dev].Units[1].sValue or 0)
@@ -690,64 +693,54 @@ class BasePlugin:
 
         logging.debug("New device(s) detected")
         for device in filtered_devices:
-            found = False
             if type(device) is str:
                 logging.debug("create_device: device in filter_list is of type string, need to convert")
                 device = json.loads(device)
+
             logging.debug("create_devices: check if need to create device: "+device["label"])
 
+            # OPT 2: dubbele found-logica vervangen door één directe check met continue
             if device["deviceURL"] in Devices:
-                logging.debug("create_devices: step 1, do not create new device: "+device["label"]+", device already exists")
-                found = True
+                logging.debug("create_devices: device bestaat al, overslaan: " + device["label"])
+                continue
 
-            if not found:
-                for domo_dev in Devices:
-                    if domo_dev == device["deviceURL"]:
-                        logging.debug("create_devices: step 2, do not create new device: "+device["label"]+", device already exists")
-                        found = True
-                        break
+            swtype = None
+            logging.debug("create_devices: Must create new device: "+device["label"])
 
-            if not found:
-                swtype = None
-                logging.debug("create_devices: Must create new device: "+device["label"])
-
-                if device["deviceURL"].startswith("io://") or device["deviceURL"].startswith("rts://"):
-                    deviceType = 244
+            if device["deviceURL"].startswith("io://") or device["deviceURL"].startswith("rts://"):
+                deviceType = 244
+                swtype = 13
+                subtype2 = 73
+                used = 1
+                if device["definition"]["uiClass"] == "Awning":
                     swtype = 13
-                    subtype2 = 73
-                    used = 1
-                    if device["definition"]["uiClass"] == "Awning":
-                        swtype = 13
-                    elif device["definition"]["uiClass"] == "RollerShutter":
-                        deviceType = 244
-                        swtype = 21
-                        subtype2 = 73
-                    elif device["definition"]["uiClass"] == "LightSensor":
-                        deviceType = 246
-                        swtype = 12
-                        subtype2 = 1
-                elif device["definition"]["uiClass"] == "Pod":
+                elif device["definition"]["uiClass"] == "RollerShutter":
                     deviceType = 244
+                    swtype = 21
                     subtype2 = 73
-                    swtype = 9
-                    used = 0
+                elif device["definition"]["uiClass"] == "LightSensor":
+                    deviceType = 246
+                    swtype = 12
+                    subtype2 = 1
+            elif device["definition"]["uiClass"] == "Pod":
+                deviceType = 244
+                subtype2 = 73
+                swtype = 9
+                used = 0
 
-                created_devices += 1
-                Domoticz.Device(DeviceID=device["deviceURL"])
-                if device["definition"]["uiClass"] in ("VenetianBlind", "ExteriorVenetianBlind"):
-                    Domoticz.Unit(Name=device["label"] + " up/down", Unit=1, Type=deviceType, Subtype=subtype2, Switchtype=swtype, DeviceID=device["deviceURL"], Used=used).Create()
-                    Domoticz.Unit(Name=device["label"] + " orientation", Unit=2, Type=244, Subtype=73, Switchtype=swtype, DeviceID=device["deviceURL"], Used=used).Create()
-                else:
-                    Domoticz.Unit(Name=device["label"], Unit=1, Type=deviceType, Subtype=subtype2, Switchtype=swtype, DeviceID=device["deviceURL"], Used=used).Create()
+            created_devices += 1
+            Domoticz.Device(DeviceID=device["deviceURL"])
+            if device["definition"]["uiClass"] in ("VenetianBlind", "ExteriorVenetianBlind"):
+                Domoticz.Unit(Name=device["label"] + " up/down", Unit=1, Type=deviceType, Subtype=subtype2, Switchtype=swtype, DeviceID=device["deviceURL"], Used=used).Create()
+                Domoticz.Unit(Name=device["label"] + " orientation", Unit=2, Type=244, Subtype=73, Switchtype=swtype, DeviceID=device["deviceURL"], Used=used).Create()
+            else:
+                Domoticz.Unit(Name=device["label"], Unit=1, Type=deviceType, Subtype=subtype2, Switchtype=swtype, DeviceID=device["deviceURL"], Used=used).Create()
 
-                logging.info("New device created: "+device["label"])
-                Domoticz.Log("New device created: "+device["label"])
-            # FIX 2: 'else: found = False' verwijderd â€” reset de found-vlag onnodig
+            logging.info("New device created: "+device["label"])
+            Domoticz.Log("New device created: "+device["label"])
 
         logging.debug("create_devices: finished create devices")
         return len(filtered_devices), created_devices
-
-    # FIX 6: updateToEx verwijderd â€” werd nergens aangeroepen
 
     def load_config_txt(self, log=False):
         config_path = os.path.join(os.path.dirname(__file__), "config.txt")
@@ -862,11 +855,19 @@ def DumpConfigToLog():
     return
 
 def firstFree():
-    """check if there is room to add devices (max 255)"""
-    for num in range(1, 254):
-        if num not in Devices:
+    """
+    OPT 1: Geeft het eerste vrije unit-nummer terug (1-254) door alle gebruikte
+    unit-nummers over alle devices op te halen. Retourneert None als er geen
+    ruimte meer is.
+    """
+    used = set()
+    for dev in Devices.values():
+        for unit in dev.Units:
+            used.add(unit)
+    for num in range(1, 255):
+        if num not in used:
             return num
-    return
+    return None
 
 #############
 # Configuration Helpers
