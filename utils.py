@@ -1,4 +1,5 @@
 import logging
+import exceptions
 
 # States that trigger a Domoticz widget update
 stateSet = {
@@ -100,4 +101,28 @@ def filter_states(Data):
             logging.debug("Device state: " + str(filtered_states[-1]))
 
     return filtered_states
+
+
+def handle_response(response, action):
+    """Raise an appropriate exception for non-2xx HTTP responses."""
+    if 200 <= response.status_code < 300:
+        return
+    if 300 <= response.status_code < 400:
+        logging.error("status code " + str(response.status_code) + " this is likely a bug")
+        raise exceptions.TahomaException("failed request during " + action + ": " + str(response.status_code))
+    elif response.status_code == 400:
+        logging.error("status code " + str(response.status_code) + " bad request, check url or body")
+        raise exceptions.TahomaException("failed request during " + action + ", check url or body: " + str(response.status_code))
+    elif response.status_code == 401:
+        logging.error("status code " + str(response.status_code) + " authorisation failed, check credentials")
+        raise exceptions.TahomaException("failed request during " + action + ", check credentials: " + str(response.status_code))
+    elif response.status_code == 404:
+        logging.error("status code " + str(response.status_code) + " server not found")
+        raise exceptions.TahomaException("failed request during " + action + ", server not found: " + str(response.status_code))
+    elif response.status_code >= 500:
+        logging.error("status code " + str(response.status_code) + " a server sided problem")
+        raise exceptions.TahomaException("failed request during " + action + ": " + str(response.status_code))
+    else:
+        logging.error("status code " + str(response.status_code))
+        raise exceptions.TahomaException("failed request during " + action + ": " + str(response.status_code))
 
