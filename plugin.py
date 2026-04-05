@@ -162,8 +162,6 @@ class BasePlugin:
         self.temp_delay = 10
         self.temp_time  = 60
 
-        # OPT 5: temp_interval_end als time.time() zodat fast polling
-        # nooit per ongeluk actief is direct na de start
         self.temp_interval_end = time.time()
 
         self.connected = None  # None = onbekend, True = verbonden, False = fout
@@ -292,8 +290,6 @@ class BasePlugin:
         # --- DEVICES OPHALEN ---
         filtered_devices = self.tahoma.get_devices()
 
-        # OPT 1: firstFree() check verwijderd   firstFree() werkte niet correct
-        # op basis van DeviceID-keys en de check was zinloos hier.
         self.create_devices(filtered_devices)
 
         # --- STATUS UPDATEN ---
@@ -454,9 +450,6 @@ class BasePlugin:
         else:
             self.command_data = json.dumps(data, indent=None, sort_keys=True)
 
-        # OPT 8: login met expliciete guards zodat een mislukte login
-        # niet stilzwijgend wordt genegeerd en send_command toch wordt
-        # aangeroepen met een ongeldige sessie.
         if not self.tahoma.logged_in:
             Domoticz.Log("Not logged in, trying to login")
             self.command = True
@@ -502,8 +495,6 @@ class BasePlugin:
         if not self.enabled:
             return False
 
-        # OPT 7: dagelijkse reload van config.txt zodat wijzigingen
-        # (host, port, sun_refresh_time) zonder herstart worden opgepikt
         today = datetime.datetime.now().day
         if today != self.last_config_day:
             Domoticz.Log("New day detected, config.txt reloaded")
@@ -715,7 +706,6 @@ class BasePlugin:
 
             logging.debug("create_devices: check if need to create device: "+device["label"])
 
-            # OPT 2: dubbele found-logica vervangen door   n directe check met continue
             if device["deviceURL"] in Devices:
                 logging.debug("create_devices: device bestaat al, overslaan: " + device["label"])
                 continue
@@ -869,21 +859,6 @@ def DumpConfigToLog():
     for x in Devices:
         Domoticz.Debug("Device:           " + str(x) + " - " + str(Devices[x]))
     return
-
-def firstFree():
-    """
-    OPT 1: Geeft het eerste vrije unit-nummer terug (1-254) door alle gebruikte
-    unit-nummers over alle devices op te halen. Retourneert None als er geen
-    ruimte meer is.
-    """
-    used = set()
-    for dev in Devices.values():
-        for unit in dev.Units:
-            used.add(unit)
-    for num in range(1, 255):
-        if num not in used:
-            return num
-    return None
 
 #############
 # Configuration Helpers

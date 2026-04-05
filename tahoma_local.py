@@ -9,8 +9,6 @@ import utils
 import listener
 import DomoticzEx as Domoticz
 
-import requests.packages.urllib3
-#requests.packages.urllib3.disable_warnings()
 import urllib3
 urllib3.disable_warnings()
 
@@ -50,26 +48,18 @@ class TahomaWebApi:
 
         elif ((response.status_code == 401) or (response.status_code == 400)):
             strData = Data["error"]
-            #logging.error("Tahoma error: must reconnect")
             self.__logged_in = False
             self.cookie = None
-            #self.listenerId = None
 
             if ("Too many" in strData):
                 logging.error("Too many connections, must wait")
-                #self.heartbeat = True
                 raise exceptions.LoginFailure("Too many connections, must wait")
             elif ("Bad credentials" in strData):
                 logging.error("login failed: Bad credentials, please update credentials and restart plugin")
-                #self.heartbeat =  False
                 raise exceptions.LoginFailure("Bad credentials, please update credentials and restart plugin")
             else:
                 logging.error("login failed, unhandled reason: "+strData)
                 raise exceptions.LoginFailure("login failed, unhandled reason: "+strData)
-
-            if (not self.__logged_in):
-                self.tahoma_login(username, password)
-                return
         return self.__logged_in
 
     def generate_token(self, pin):
@@ -122,7 +112,6 @@ class TahomaWebApi:
         response = requests.get(self.base_url_web + url_act, headers=self.headers_json, cookies=self.cookie)
 
         if response.status_code == 200:
-            #self.token = response.json()['token']
             logging.debug("succeeded to get tokens: " + str(response.json()))
         elif ((response.status_code == 401) or (response.status_code == 400)):
             self.__logged_in = False
@@ -147,7 +136,6 @@ class TahomaWebApi:
 class SomfyBox(TahomaWebApi):
     def __init__(self, pin, port):
         self.base_url_local = "https://" + str(pin) + ".local:" + str(port) + "/enduser-mobile-web/1/enduserAPI"
-        #self.headers_json = {"Content-Type": "application/json", "Accept": "application/json"}
         self.startup = True
         self.listener = listener.Listener(8)
         logging.debug("SomfyBox initialised")

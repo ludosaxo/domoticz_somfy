@@ -1,6 +1,4 @@
 import logging
-import exceptions
-import json
 
 # States that trigger a Domoticz widget update
 stateSet = {
@@ -28,9 +26,6 @@ _SUPPORTED_IO_CLASSES = {
 def filter_devices(Data):
     logging.debug("start filter devices")
 
-    # OPT 6: retourneer lege lijst in plaats van None zodat callers
-    # veilig len() / iteratie kunnen gebruiken zonder TypeError.
-    # OPT 6b: efficiÃ«nte check via any() i.p.v. json.dumps van de volledige dataset
     if not any("uiClass" in str(d.get("definition", {})) for d in Data):
         logging.error("filter_devices: missing uiClass in response")
         logging.debug(str(Data))
@@ -42,8 +37,6 @@ def filter_devices(Data):
         device_url = device["deviceURL"]
         logging.debug("filter_devices: Device name: " + device["label"] + " Device class: " + ui_class)
 
-        # OPT 7: expliciete haakjes toegevoegd zodat de operator-prioriteit van
-        # 'and'/'or' geen onverwachte filter-resultaten geeft
         is_io_or_rts = device_url.startswith("io://") or device_url.startswith("rts://")
         is_supported_io = ui_class in _SUPPORTED_IO_CLASSES and is_io_or_rts
         is_pod = ui_class == "Pod" and device_url.startswith("internal://")
@@ -108,5 +101,3 @@ def filter_states(Data):
 
     return filtered_states
 
-# OPT 8: handle_response verwijderd â€” was een duplicaat van de methode in
-# tahoma.py en werd nergens aangeroepen vanuit utils.py

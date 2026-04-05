@@ -89,8 +89,6 @@ class Tahoma:
         }
         data = "userId=" + urllib.parse.quote(username) + "&userPassword=" + urllib.parse.quote(password)
 
-        # OPT 3: try/except toegevoegd zodat netwerkstoringen correct worden
-        # afgevangen in plaats van een onbehandelde exception te gooien
         try:
             response = requests.post(url, data=data, headers=headers, timeout=self.timeout)
         except requests.exceptions.RequestException as exp:
@@ -133,8 +131,6 @@ class Tahoma:
             else:
                 logging.error("login failed, unhandled reason: " + strData)
                 raise exceptions.LoginFailure("login failed, unhandled reason: " + strData)
-
-            # OPT 1: dode code na raise verwijderd â€” werd nooit bereikt
 
         else:
             logging.error(
@@ -189,8 +185,6 @@ class Tahoma:
         if not self.listener.valid:
             raise exceptions.TahomaException("No listenerId has been provided")
 
-        # OPT 4: expliciete lege lijst bij startup zodat callers veilig kunnen
-        # itereren zonder een TypeError op None te krijgen
         if self.startup:
             logging.debug("get_events: startup fase, geen events opgehaald")
             return []
@@ -285,8 +279,6 @@ class Tahoma:
         self.refresh = False
         return response
 
-        # OPT 2: register_listener_old verwijderd â€” dode code, werd nergens aangeroepen
-
     def send_command(self, json_data):
         logging.debug("start command")
         Headers = {
@@ -300,7 +292,6 @@ class Tahoma:
         logging.info("Sending command to tahoma api")
         logging.debug("onCommand: headers: '" + str(Headers) + "', data '" + str(json_data) + "'")
 
-        # OPT 5: hardcoded timeout van 4s vervangen door self.timeout
         try:
             response = requests.post(
                 self.base_url + '/enduser-mobile-web/enduserAPI/exec/apply',

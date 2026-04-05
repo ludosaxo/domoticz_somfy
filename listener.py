@@ -2,7 +2,6 @@ import requests
 import exceptions
 import logging
 import datetime
-import utils
 import json
 
 class Listener:
@@ -48,5 +47,4 @@ class Listener:
             self.__valid = True
         else:
             self.__valid = False
-            #utils.handle_response(response, "get listener ID")
         return response
