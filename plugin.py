@@ -168,6 +168,7 @@ class BasePlugin:
 
         self.connected = None  # None = onbekend, True = verbonden, False = fout
         self._last_connected_time = None
+        self._last_error = ""
         self._temp_log_active = False
         self._sun_refreshed_today = None  # type: Optional[datetime.date]  # Track which date we last refreshed
 
@@ -596,6 +597,7 @@ class BasePlugin:
                 if self.connected is False:
                     Domoticz.Log("Connection restored")
                 self.connected = True
+                self._last_error = ""
                 self._last_connected_time = datetime.datetime.now()
                 self.update_connection_device(True)
 
@@ -612,6 +614,7 @@ class BasePlugin:
 
                 if self.connected is True or self.connected is None:
                     Domoticz.Error(f"{short} (box not reachable)")
+                    self._last_error = short
                     self.update_connection_device(False)
                 self.connected = False
                 filtered_devices = None
@@ -800,12 +803,13 @@ class BasePlugin:
             return
         conn_type = "Local" if self.local else "Web"
         if connected:
+            last_poll = self._last_connected_time.strftime("%H:%M:%S") if self._last_connected_time else "unknown"
             nValue = 1
-            sValue = f"Connected \u2014 {conn_type} API"
+            sValue = f"Connected \u2014 {conn_type} API | Last poll: {last_poll}"
         else:
-            last_seen = self._last_connected_time.strftime("%H:%M") if self._last_connected_time else "unknown"
+            error = self._last_error if self._last_error else "unknown"
             nValue = 4
-            sValue = f"Disconnected \u2014 last seen: {last_seen}"
+            sValue = f"Disconnected | Error: {error}"
         unit = Devices[_CONNECTION_DEVICE_ID].Units[1]
         if unit.nValue != nValue or unit.sValue != sValue:
             unit.nValue = nValue
