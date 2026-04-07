@@ -103,6 +103,40 @@ def filter_states(Data):
     return filtered_states
 
 
+_GATEWAY_TYPES = {
+    86: "Connexoon IO",
+    87: "TaHoma",
+    88: "TaHoma Switch",
+    89: "Connexoon RTS",
+    90: "TaHoma Beecon",
+    101: "Cozytouch",
+    136: "Rexel Energeasy Connect",
+    137: "Hi Kumo",
+    162: "Connexoon Window RTS",
+}
+
+
+def parse_gateway_info(gateways):
+    """Extract a summary dict from the /setup/gateways API response.
+
+    Returns a dict with keys: gateway_id, type_label, connectivity, protocol_version, mode.
+    Falls back to empty strings when a field is missing.
+    """
+    if not gateways:
+        return {}
+    gw = gateways[0]
+    gw_type_int = gw.get("type")
+    type_label = _GATEWAY_TYPES.get(gw_type_int, f"Unknown ({gw_type_int})" if gw_type_int is not None else "Unknown")
+    connectivity = gw.get("connectivity", {})
+    return {
+        "gateway_id":       gw.get("gatewayId", ""),
+        "type_label":       type_label,
+        "connectivity":     connectivity.get("status", ""),
+        "protocol_version": connectivity.get("protocolVersion", ""),
+        "mode":             gw.get("mode", ""),
+    }
+
+
 def handle_response(response, action):
     """Raise an appropriate exception for non-2xx HTTP responses."""
     if 200 <= response.status_code < 300:

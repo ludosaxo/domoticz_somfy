@@ -171,6 +171,7 @@ class BasePlugin:
         self._last_error = ""
         self._temp_log_active = False
         self._sun_refreshed_today = None  # type: Optional[datetime.date]  # Track which date we last refreshed
+        self._gateway_info = {}
 
     def onStart(self):
         """
@@ -317,6 +318,20 @@ class BasePlugin:
             return False
 
         self.create_devices(filtered_devices)
+
+        # --- GATEWAY INFO OPHALEN (alleen local) ---
+        if self.local:
+            try:
+                gateways = self.tahoma.get_gateways()
+                self._gateway_info = utils.parse_gateway_info(gateways)
+                Domoticz.Log(
+                    "Gateway: {type_label} | Status: {connectivity} | "
+                    "Protocol: {protocol_version} | Mode: {mode}".format(**self._gateway_info)
+                )
+                logging.debug("Gateway info: " + str(self._gateway_info))
+            except Exception as e:
+                Domoticz.Error("Failed to get gateway info: " + str(e))
+                logging.error("Failed to get gateway info: " + str(e))
 
         self.create_connection_device()
 
@@ -805,7 +820,12 @@ class BasePlugin:
         if connected:
             last_poll = self._last_connected_time.strftime("%H:%M:%S") if self._last_connected_time else "unknown"
             nValue = 1
-            sValue = f"Connected \u2014 {conn_type} API | Last poll: {last_poll}"
+            gw = self._gateway_info
+            if gw.get("type_label"):
+                gw_str = f" | GW: {gw['type_label']} ({gw['connectivity']})"
+            else:
+                gw_str = ""
+            sValue = f"Connected \u2014 {conn_type} API | Last poll: {last_poll}{gw_str}"
         else:
             error = self._last_error if self._last_error else "unknown"
             nValue = 4
