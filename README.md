@@ -100,11 +100,11 @@ Activating this mode will enable a local API on your TaHoma and Connexoon box. B
 2. Your Somfy box needs to be reachable in your network.
 
 **Option A – Direct IP (no DNS needed):**  
-Select **Local IP** in the **Connection** field (`Mode4`) and fill in the IP address of your Somfy box in the **Gateway PIN or IP Address** field, for example `192.168.1.100`.  
-> ⚠️ On first use you must generate a token. Do this by temporarily selecting **Local PIN** to generate the token, then switch back to **Local IP**.
+Select **Local IP** in the **Connection** field (`Mode4`), fill in the Gateway PIN in the **Gateway PIN** field (`Address`), and fill in the IP address of your Somfy box in the **Local IP Address** field (`Mode3`), for example `192.168.1.100`.  
+The plugin will automatically generate and store a token on first start using the PIN and the Somfy web API.
 
 **Option B – PIN with DNS / hosts entry:**  
-Select **Local PIN** in the **Connection** field (`Mode4`). Enter the Gateway PIN in the **Gateway PIN or IP Address** field.  
+Select **Local PIN** in the **Connection** field (`Mode4`). Enter the Gateway PIN in the **Gateway PIN** field (`Address`).  
 You also need to link your Somfy Box PIN to the Somfy Box IP address in your network:
 ```
 192.168.1.1 1234-1234-1234.local
@@ -138,7 +138,8 @@ Add the hardware to your Domoticz system and fill in the required fields
 | 🔄 Refresh Interval (`Mode2`) | `day;night` polling interval (in seconds) |
 | ⌛ Temp polling interval (`Mode5`) | refresh time and duration |
 | 🌐 Connection (`Mode4`) | **Web** – via Somfy web server; **Local PIN** – direct connection using Gateway PIN (DNS required); **Local IP** – direct connection using IP address (no DNS required) |
-| 📍 Gateway PIN or IP Address | Gateway PIN (for Web / Local PIN) or IP address (for Local IP) of your Somfy box |
+| 📍 Gateway PIN (`Address`) | Gateway PIN of your Somfy box (e.g. `1234-1234-1234`). Used for all connection modes to generate/activate the local API token. |
+| 🌐 Local IP Address (`Mode3`) | Only for **Local IP** mode: IP address of your Somfy box (e.g. `192.168.1.100`). Leave empty for Web or Local PIN mode. |
 | 🔁 Reset token (`Mode1`) | `False` by default; set `True` if token errors occur |
 | 🔢 Portnumber | Default `8443` |
 | 🐞 Debug logging (`Mode6`) | `False` by default; `True` for verbose logs |

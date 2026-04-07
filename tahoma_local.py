@@ -134,7 +134,7 @@ class TahomaWebApi:
         return response.json()
 
 class SomfyBox(TahomaWebApi):
-    def __init__(self, pin, port, ip=None):
+    def __init__(self, pin=None, port=8443, ip=None):
         host = ip if ip else str(pin) + ".local"
         self.base_url_local = "https://" + host + ":" + str(port) + "/enduser-mobile-web/1/enduserAPI"
         self.startup = True

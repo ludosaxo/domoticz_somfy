@@ -58,15 +58,13 @@
     </tr>
     <tr>
         <td>Address</td>
-        <td>Gateway PIN (for Web or Local PIN) or IP address (for Local IP) of the Tahoma box.
-        <br/>Web / Local PIN: enter the Gateway PIN, e.g. 1234-1234-1234
-        <br/>Local IP: enter the IP address of the box, e.g. 192.168.1.100</td>
+        <td>Gateway PIN of the Tahoma box, e.g. 1234-1234-1234.
+        <br/>Used for all connection modes to generate and activate the local API token via the Somfy web API.</td>
     </tr>
     <tr>
-        <td>Gateway PIN (Local IP)</td>
-        <td>Only used in Local IP mode. Enter the Gateway PIN (e.g. 1234-1234-1234) so the plugin can
-        generate and store a token via the Somfy web API.
-        <br/>Leave empty once a valid token is stored — it is only needed on first start or when resetting the token.</td>
+        <td>Local IP Address</td>
+        <td>Only used in Local IP mode. Enter the IP address of the Tahoma box, e.g. 192.168.1.100.
+        <br/>Leave empty when using Web or Local PIN mode.</td>
     </tr>
     <tr>
         <td>Port</td>
@@ -96,7 +94,8 @@
                 <option label="Local IP" value="LocalIP"/>
             </options>
         </param>
-        <param field="Address" label="Gateway PIN or IP Address" width="175px" required="true" default="1234-1234-1234"/>
+        <param field="Address" label="Gateway PIN" width="175px" required="true" default="1234-1234-1234"/>
+        <param field="Mode3" label="Local IP Address" width="175px" default=""/>
         <param field="Port" label="Portnumber Tahoma box" width="100px" required="true" default="8443"/>
         <param field="Mode1" label="Reset token" width="100px">            
             <options>
@@ -241,23 +240,27 @@ class BasePlugin:
         self.enabled = True
 
         # --- Connect to Tahoma/Connexoon box ---
-        address = Parameters.get("Address", "").strip()
+        pin     = Parameters.get("Address", "").strip()
+        mode3   = Parameters.get("Mode3", "").strip()
         port    = int(Parameters.get("Port", 8443))
         mode4   = Parameters.get("Mode4", "Local")
 
         if mode4 == "LocalIP":
-            # Address field contains an IP address — validate it
-            try:
-                ipaddress.ip_address(address)
-            except ValueError:
-                Domoticz.Error(f"Invalid IP address in Address field for Local IP mode: '{address}'. Plugin cannot start.")
+            # Mode3 holds the IP address in Local IP mode
+            if not mode3:
+                Domoticz.Error("Local IP mode: no IP address set in 'Local IP Address' field. Plugin cannot start.")
                 return False
-            self.tahoma = SomfyBox(None, port, ip=address)
+            try:
+                ipaddress.ip_address(mode3)
+            except ValueError:
+                Domoticz.Error(f"Invalid IP address in 'Local IP Address' field: '{mode3}'. Plugin cannot start.")
+                return False
+            self.tahoma = SomfyBox(None, port, ip=mode3)
             self.local       = True
             self.local_ip_mode = True
-            Domoticz.Log(f"Local IP connection configured: {address}:{port}")
+            Domoticz.Log(f"Local IP connection configured: {mode3}:{port}")
         elif mode4 == "Local":
-            self.tahoma = SomfyBox(address, port)
+            self.tahoma = SomfyBox(pin, port)
             self.local       = True
             self.local_ip_mode = False
         else:
@@ -265,18 +268,16 @@ class BasePlugin:
             self.local       = False
             self.local_ip_mode = False
 
-        # pin is used by setup_and_sync_devices for token management (only relevant in Local PIN mode)
-        pin_or_address = address
-
         try:
             self.tahoma.tahoma_login(str(Parameters.get("Username")), str(Parameters.get("Password")))
         except Exception as exp:
             Domoticz.Error("Failed to login: " + str(exp))
             return False
 
-        self.setup_and_sync_devices(pin_or_address)
+        # pin (Address) is used by setup_and_sync_devices for token management
+        self.setup_and_sync_devices(pin)
 
-    def setup_and_sync_devices(self, pin_or_address):
+    def setup_and_sync_devices(self, pin):
         if not self.tahoma.logged_in:
             Domoticz.Error("TaHoma not logged in")
             return False
@@ -287,23 +288,27 @@ class BasePlugin:
             confToken = getConfigItem('token', '0')
 
             if self.local_ip_mode:
-                # In Local IP mode the PIN is not available — token generation via web API is not possible.
-                # A stored token is required. If none exists, the user must first connect once with "Local PIN" mode.
+                # In Local IP mode the PIN (Address field) is still available for token generation via web API.
                 if confToken == '0' or Parameters["Mode1"] == "True":
-                    Domoticz.Error(
-                        "Local IP mode: no stored token found. "
-                        "Please select 'Local PIN' mode first to generate a token, then switch back to 'Local IP'."
-                    )
-                    self.enabled = False
-                    return False
+                    if not pin or pin == "1234-1234-1234":
+                        Domoticz.Error(
+                            "Local IP mode: no stored token and no valid Gateway PIN in Address field. "
+                            "Please enter the Gateway PIN in the Address field so a token can be generated."
+                        )
+                        self.enabled = False
+                        return False
+                    logging.debug("no token found (LocalIP mode), generating a new one using PIN")
+                    self.tahoma.generate_token(pin)
+                    self.tahoma.activate_token(pin, self.tahoma.token)
+                    setConfigItem('token', self.tahoma.token)
                 else:
                     logging.debug("found token in configuration (LocalIP mode): " + str(confToken))
                     self.tahoma.token = confToken
             else:
                 if confToken == '0' or Parameters["Mode1"] == "True":
                     logging.debug("no token found, generate a new one")
-                    self.tahoma.generate_token(pin_or_address)
-                    self.tahoma.activate_token(pin_or_address, self.tahoma.token)
+                    self.tahoma.generate_token(pin)
+                    self.tahoma.activate_token(pin, self.tahoma.token)
                     setConfigItem('token', self.tahoma.token)
                 else:
                     logging.debug("found token in configuration: " + str(confToken))
@@ -322,23 +327,36 @@ class BasePlugin:
         except exceptions.AuthenticationFailure:
             if self.local:
                 if self.local_ip_mode:
-                    Domoticz.Error(
-                        "Local IP mode: stored token rejected. "
-                        "Please switch to 'Local PIN' mode temporarily to regenerate the token, then switch back to 'Local IP'."
-                    )
-                    self.enabled = False
-                    return False
-                Domoticz.Log("Stored token rejected (401), regenerating token...")
-                try:
-                    self.tahoma.generate_token(pin_or_address)
-                    self.tahoma.activate_token(pin_or_address, self.tahoma.token)
-                    setConfigItem('token', self.tahoma.token)
-                    self.tahoma.register_listener()
-                    filtered_devices = self.tahoma.get_devices()
-                except Exception as retry_e:
-                    Domoticz.Error("Failed to get devices after token regeneration: " + str(retry_e))
-                    self.enabled = False
-                    return False
+                    if not pin or pin == "1234-1234-1234":
+                        Domoticz.Error(
+                            "Local IP mode: stored token rejected and no valid Gateway PIN in Address field. "
+                            "Please enter the Gateway PIN in Address and set Reset token to True."
+                        )
+                        self.enabled = False
+                        return False
+                    Domoticz.Log("Local IP mode: stored token rejected (401), regenerating token using PIN...")
+                    try:
+                        self.tahoma.generate_token(pin)
+                        self.tahoma.activate_token(pin, self.tahoma.token)
+                        setConfigItem('token', self.tahoma.token)
+                        self.tahoma.register_listener()
+                        filtered_devices = self.tahoma.get_devices()
+                    except Exception as retry_e:
+                        Domoticz.Error("Failed to get devices after token regeneration: " + str(retry_e))
+                        self.enabled = False
+                        return False
+                else:
+                    Domoticz.Log("Stored token rejected (401), regenerating token...")
+                    try:
+                        self.tahoma.generate_token(pin)
+                        self.tahoma.activate_token(pin, self.tahoma.token)
+                        setConfigItem('token', self.tahoma.token)
+                        self.tahoma.register_listener()
+                        filtered_devices = self.tahoma.get_devices()
+                    except Exception as retry_e:
+                        Domoticz.Error("Failed to get devices after token regeneration: " + str(retry_e))
+                        self.enabled = False
+                        return False
             else:
                 Domoticz.Error("Failed to get devices: authentication failure")
                 self.enabled = False
