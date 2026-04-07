@@ -126,6 +126,7 @@ import math
 from tahoma_local import SomfyBox
 import utils
 import urllib.request
+import ipaddress
 
 _CONNECTION_DEVICE_ID = "connection_indicator"
 
@@ -217,7 +218,12 @@ class BasePlugin:
         # --- Local IP Address (Mode3, optional) ---
         local_ip = Parameters.get("Mode3", "").strip() or None
         if local_ip:
-            Domoticz.Log(f"Local IP address configured: {local_ip}")
+            try:
+                ipaddress.ip_address(local_ip)
+                Domoticz.Log(f"Local IP address configured: {local_ip}")
+            except ValueError:
+                Domoticz.Error(f"Invalid IP address in Local IP Address field: '{local_ip}'. Falling back to PIN-based hostname.")
+                local_ip = None
 
         # --- TEMP_DELAY / TEMP_TIME from Mode5 ---
         try:
