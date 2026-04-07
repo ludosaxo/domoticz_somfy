@@ -99,12 +99,13 @@ Activating this mode will enable a local API on your TaHoma and Connexoon box. B
 
 2. Your Somfy box needs to be traceable in your network.
 
-**Option A – Direct IP (recommended, no DNS needed):**  
-Fill in the **Local IP Address** field (`Mode3`) in the plugin configuration with the IP address of your Somfy box, for example `192.168.1.100`. The plugin will connect directly to that IP.
+**Option A – Direct IP (no DNS needed):**  
+Select **Local IP** in the **Connection** field (`Mode4`) and fill in the IP address of your Somfy box in the **Gateway PIN or IP Address** field, for example `192.168.1.100`.  
+> ⚠️ On first use you must generate a token. Do this by temporarily selecting **Local PIN** to generate the token, then switch back to **Local IP**.
 
-**Option B – DNS / hosts entry:**  
-Leave the **Local IP Address** field empty. In that case you need to link your Somfy Box PIN to the Somfy Box IP address in your network.
-Add your Somfy Box PIN number to the IP in your local network in etc/hosts or in your DNS Server
+**Option B – PIN with DNS / hosts entry:**  
+Select **Local PIN** in the **Connection** field (`Mode4`). Enter the Gateway PIN in the **Gateway PIN or IP Address** field.  
+You also need to link your Somfy Box PIN to the Somfy Box IP address in your network:
 ```
 192.168.1.1 1234-1234-1234.local
 ```
@@ -134,11 +135,10 @@ Add the hardware to your Domoticz system and fill in the required fields
 |--------------|--------------|
 | 👤 Username | Somfy account login |
 | 🔑 Password | Somfy account password |
-| 🌅 Local IP Address (`Mode3`) | Optional IP address of the Somfy box. When filled in, DNS/hosts configuration is not needed. Leave empty to use `<PIN>.local` (requires a DNS or `/etc/hosts` entry). |
 | 🔄 Refresh Interval (`Mode2`) | `day;night` polling interval (in seconds) |
-| ⌛ Temp polling interval (`Mode5`) |  refresh time and duration |
-| 🌐 Connection (`Mode4`) | Local (recommended) or Web |
-| 📍 Gateway PIN | Your Somfy box PIN |
+| ⌛ Temp polling interval (`Mode5`) | refresh time and duration |
+| 🌐 Connection (`Mode4`) | **Web** – via Somfy web server; **Local PIN** – direct connection using Gateway PIN (DNS required); **Local IP** – direct connection using IP address (no DNS required) |
+| 📍 Gateway PIN or IP Address | Gateway PIN (for Web / Local PIN) or IP address (for Local IP) of your Somfy box |
 | 🔁 Reset token (`Mode1`) | `False` by default; set `True` if token errors occur |
 | 🔢 Portnumber | Default `8443` |
 | 🐞 Debug logging (`Mode6`) | `False` by default; `True` for verbose logs |
