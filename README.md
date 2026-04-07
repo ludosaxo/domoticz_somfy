@@ -97,8 +97,13 @@ sudo apt-get install python3-requests
 
 Activating this mode will enable a local API on your TaHoma and Connexoon box. Be aware that Somfy will not be able to provide support for usage of this API.
 
-2. Your Somfy box needs the traceable in your network.
-To do this, you need to link your Somfy Box PIN to the Somfy Box IP address.
+2. Your Somfy box needs to be traceable in your network.
+
+**Option A – Direct IP (recommended, no DNS needed):**  
+Fill in the **Local IP Address** field (`Mode3`) in the plugin configuration with the IP address of your Somfy box, for example `192.168.1.100`. The plugin will connect directly to that IP.
+
+**Option B – DNS / hosts entry:**  
+Leave the **Local IP Address** field empty. In that case you need to link your Somfy Box PIN to the Somfy Box IP address in your network.
 Add your Somfy Box PIN number to the IP in your local network in etc/hosts or in your DNS Server
 ```
 192.168.1.1 1234-1234-1234.local
@@ -129,7 +134,7 @@ Add the hardware to your Domoticz system and fill in the required fields
 |--------------|--------------|
 | 👤 Username | Somfy account login |
 | 🔑 Password | Somfy account password |
-| 🌅 Sunrise/Sunset Delay (`Mode3`) | Delay in minutes for sunrise/sunset calculations. in minutes bedore sunrise and after sunset |
+| 🌅 Local IP Address (`Mode3`) | Optional IP address of the Somfy box. When filled in, DNS/hosts configuration is not needed. Leave empty to use `<PIN>.local` (requires a DNS or `/etc/hosts` entry). |
 | 🔄 Refresh Interval (`Mode2`) | `day;night` polling interval (in seconds) |
 | ⌛ Temp polling interval (`Mode5`) |  refresh time and duration |
 | 🌐 Connection (`Mode4`) | Local (recommended) or Web |
@@ -163,9 +168,18 @@ Invalid or missing values will fall back to default settings
 ```
 DOMOTICZ_HOST=127.0.0.1
 DOMOTICZ_PORT=8080
+SUN_REFRESH_TIME=02:15
+# SUNRISE_DELAY=30
+# SUNSET_DELAY=60
 
 ```
-Remove the # for the setting you want to use in config.txt
+| Key | Description | Default |
+|-----|-------------|---------|
+| `DOMOTICZ_HOST` | IP address of your Domoticz server | `127.0.0.1` |
+| `DOMOTICZ_PORT` | Port of your Domoticz server | `8080` |
+| `SUN_REFRESH_TIME` | Time of day to refresh sunrise/sunset data (HH:MM) | `02:00` |
+| `SUNRISE_DELAY` | Minutes before sunrise when day mode starts | `30` |
+| `SUNSET_DELAY` | Minutes after sunset when night mode starts | `60` |
 
 ---
 ### 🔄 Slider Status in Domoticz

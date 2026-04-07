@@ -44,10 +44,11 @@
         <br/>The first number is for day refresh polling (in seconds), the second is for night refresh polling (in seconds).</td>
     </tr>
     <tr>
-        <td>Night Mode</td>
-        <td>When should the night mode start?
-        <br/>Enter two numbers separated by a semicolon (;).
-        <br/>The first number is the time (in minutes) before sunrise, and the second number is the time after sunset.</td>
+        <td>Local IP Address</td>
+        <td>Optional IP address of the Somfy box for local API access.
+        <br/>When filled in, the plugin connects directly via IP instead of requiring a DNS/hosts entry for the PIN.
+        <br/>Leave empty to use the default &lt;PIN&gt;.local hostname (requires DNS or /etc/hosts entry).
+        <br/>Sunrise/sunset delays can be set in config.txt (SUNRISE_DELAY and SUNSET_DELAY).</td>
     </tr>
     <tr>
         <td>Temp polling interval</td>
@@ -85,7 +86,7 @@
         <param field="Username" label="Username" width="200px" required="true" default=""/>
         <param field="Password" label="Password" width="200px" required="true" default="" password="true"/>
         <param field="Mode2" label="Refresh interval" width="100px" default="30;900"/>
-        <param field="Mode3" label="Night Mode" width="100px" default="30;60"/>
+        <param field="Mode3" label="Local IP Address" width="150px" default=""/>
         <param field="Mode5" label="Temp refresh interval" width="200px" default="15;120"/>
         <param field="Mode4" label="Connection" width="100px">
             <description><br/>Somfy is depreciating the Web access, so it is better to use the local API</description>
@@ -213,16 +214,10 @@ class BasePlugin:
             self.nightInterval = 900
             Domoticz.Error(f"Failed to parse Mode2 for intervals, using defaults: {e}")
 
-        # --- Sunrise / Sunset delays (Mode3) ---
-        try:
-            sr_delay_str, ss_delay_str = Parameters.get("Mode3", "30;60").split(";")
-            self.sunriseDelay = int(sr_delay_str.strip())
-            self.sunsetDelay  = int(ss_delay_str.strip())
-            Domoticz.Log(f"Sunrise / Sunset delays : {self.sunriseDelay}m and {self.sunsetDelay}m")
-        except Exception as e:
-            self.sunriseDelay = 30
-            self.sunsetDelay  = 60
-            Domoticz.Error(f"Failed to parse Mode3 for sunrise/sunset delays, using defaults: {e}")
+        # --- Local IP Address (Mode3, optional) ---
+        local_ip = Parameters.get("Mode3", "").strip() or None
+        if local_ip:
+            Domoticz.Log(f"Local IP address configured: {local_ip}")
 
         # --- TEMP_DELAY / TEMP_TIME from Mode5 ---
         try:
@@ -252,7 +247,7 @@ class BasePlugin:
         port = int(Parameters.get("Port", 8443))
 
         if Parameters.get("Mode4") == "Local":
-            self.tahoma = SomfyBox(pin, port)
+            self.tahoma = SomfyBox(pin, port, ip=local_ip)
             self.local  = True
         else:
             self.tahoma = tahoma.Tahoma()
@@ -861,10 +856,21 @@ class BasePlugin:
                         self.domoticz_port = val
                     elif key == "SUN_REFRESH_TIME":
                         self.sun_refresh_time = val  # verwacht formaat "HH:MM"
+                    elif key == "SUNRISE_DELAY":
+                        try:
+                            self.sunriseDelay = int(val)
+                        except ValueError:
+                            Domoticz.Error(f"Invalid SUNRISE_DELAY value in config.txt: {val}")
+                    elif key == "SUNSET_DELAY":
+                        try:
+                            self.sunsetDelay = int(val)
+                        except ValueError:
+                            Domoticz.Error(f"Invalid SUNSET_DELAY value in config.txt: {val}")
 
             Domoticz.Log(
                 f"Config.txt loaded. Domoticz @ {self.domoticz_host}:{self.domoticz_port} | "
-                f"Sunset and Sunrise refresh time: {self.sun_refresh_time}"
+                f"Sunset and Sunrise refresh time: {self.sun_refresh_time} | "
+                f"Sunrise delay: {self.sunriseDelay}m, Sunset delay: {self.sunsetDelay}m"
             )
         except Exception as e:
             Domoticz.Error(f"Fout in load_config_txt: {str(e)}")
