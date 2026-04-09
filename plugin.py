@@ -43,16 +43,19 @@
         <br/>Web: via Somfy web server (requires continuous internet access)
         <br/>Local PIN: connect directly to the box using the Gateway PIN (requires DNS or /etc/hosts entry for &lt;PIN&gt;.local)
         <br/>Local IP: connect directly to the box using an IP address (no DNS required)
-        <br/>Somfy is depreciating the Web access, so it is better to use the local API</td>
+        <br/>
+        <br/>Somfy is depreciating the Web access, so it is better to use the local API
+        <br/>Preferable use the Local IP mode</td>
     </tr>
     <tr>
         <td>Address</td>
         <td>Gateway PIN of the Tahoma box, e.g. 1234-1234-1234.
+        <br/>
         <br/>Used for all connection modes to generate and activate the local API token via the Somfy web API.</td>
     </tr>
     <tr>
         <td>Local IP Address</td>
-        <td>Only used in Local IP mode. Enter the IP address of the Tahoma box, e.g. 192.168.1.100.
+        <td>Only used in Local IP mode. Enter the IP address of the Tahoma box, e.g. 192.168.1.100
         <br/>Leave empty when using Web or Local PIN mode.</td>
     </tr>
     <tr>
